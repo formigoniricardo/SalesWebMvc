@@ -1,0 +1,36 @@
+@using SalesWebMvc.Helpers
+@model IEnumerable<SalesWebMvc.Models.SalesRecord>
+@{
+    var count = (int)(ViewData["PendingCount"] ?? 0);
+}
+<div class="dropdown">
+    <button class="icon-btn position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+            aria-label="Notificações (@count pendentes)">
+        <i class="bi bi-bell"></i>
+        @if (count > 0)
+        {
+            <span class="notif-dot">@(count > 9 ? "9+" : count.ToString())</span>
+        }
+    </button>
+    <div class="dropdown-menu dropdown-menu-end notif-menu">
+        <div class="notif-header">
+            <strong>Notificações</strong>
+            <span class="text-secondary small">@count venda(s) aguardando faturamento</span>
+        </div>
+        @if (!Model.Any())
+        {
+            <div class="notif-empty"><i class="bi bi-check2-circle"></i> Tudo em dia!</div>
+        }
+        @foreach (var sale in Model)
+        {
+            <a class="notif-item" asp-controller="SalesRecords" asp-action="Details" asp-route-id="@sale.Id">
+                <span class="notif-icon"><i class="bi bi-hourglass-split"></i></span>
+                <span class="notif-body">
+                    <span>Venda #@sale.Id de <strong>@sale.Seller?.Name</strong> pendente</span>
+                    <span class="text-secondary small">@Format.Money(sale.Amount) · @Format.Date(sale.Date)</span>
+                </span>
+            </a>
+        }
+        <a class="notif-footer" asp-controller="SalesRecords" asp-action="Index" asp-route-status="Pending">Ver todas as pendentes</a>
+    </div>
+</div>

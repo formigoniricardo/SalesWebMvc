@@ -1,15 +1,22 @@
 using Microsoft.AspNetCore.Mvc;
-using SalesWebMvc.Models;
 using SalesWebMvc.Models.ViewModels;
+using SalesWebMvc.Services;
 using System.Diagnostics;
 
 namespace SalesWebMvc.Controllers
 {
     public class HomeController : Controller
     {
-        public IActionResult Index()
+        private readonly DashboardService _dashboardService;
+
+        public HomeController(DashboardService dashboardService)
         {
-            return View();
+            _dashboardService = dashboardService;
+        }
+
+        public async Task<IActionResult> Index()
+        {
+            return View(await _dashboardService.GetDashboardAsync());
         }
 
         public IActionResult Privacy()
@@ -21,9 +28,13 @@ namespace SalesWebMvc.Controllers
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
+        public IActionResult Error(string? message)
         {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+            return View(new ErrorViewModel
+            {
+                Message = message,
+                RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier
+            });
         }
     }
 }

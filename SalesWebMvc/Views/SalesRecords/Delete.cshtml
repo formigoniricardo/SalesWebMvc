@@ -1,0 +1,30 @@
+@model SalesRecord
+@{
+    ViewData["Title"] = "Excluir venda";
+}
+
+<div class="page-header">
+    <div>
+        <nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a asp-action="Index">Vendas</a></li><li class="breadcrumb-item active">Excluir</li></ol></nav>
+        <h1 class="page-title">Excluir venda #@Model.Id</h1>
+    </div>
+</div>
+
+<section class="card-app form-card danger-zone">
+    <div class="card-app-header">
+        <h2 class="card-app-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Esta ação não pode ser desfeita</h2>
+    </div>
+    <div class="card-app-body">
+        <dl class="detail-list">
+            <dt>Data</dt><dd>@Format.Date(Model.Date)</dd>
+            <dt>Vendedor</dt><dd>@Model.Seller?.Name</dd>
+            <dt>Valor</dt><dd class="amount">@Format.Money(Model.Amount)</dd>
+            <dt>Status</dt><dd><status-badge status="@Model.Status" /></dd>
+        </dl>
+    </div>
+    <form asp-action="Delete" class="card-app-header justify-content-end border-top border-bottom-0">
+        <input type="hidden" asp-for="Id" />
+        <a asp-action="Index" class="btn btn-ghost">Cancelar</a>
+        <button type="submit" class="btn btn-danger"><i class="bi bi-trash3 me-1"></i> Confirmar exclusão</button>
+    </form>
+</section>

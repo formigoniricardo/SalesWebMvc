@@ -1,0 +1,37 @@
+@model SalesRecordFormViewModel
+
+<div asp-validation-summary="ModelOnly"></div>
+
+<div class="row g-3">
+    <div class="col-12">
+        <label asp-for="SalesRecord.SellerId" class="form-label"></label>
+        <select asp-for="SalesRecord.SellerId" asp-items="@(new SelectList(Model.Sellers, "Id", "Name"))" class="form-select">
+            <option value="">Selecione um vendedor…</option>
+        </select>
+        <span asp-validation-for="SalesRecord.SellerId"></span>
+    </div>
+    <div class="col-12 col-md-6">
+        <label asp-for="SalesRecord.Date" class="form-label"></label>
+        <input asp-for="SalesRecord.Date" type="date" class="form-control" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+        <span asp-validation-for="SalesRecord.Date"></span>
+        <div class="form-hint">Não é permitido registrar vendas com data futura.</div>
+    </div>
+    <div class="col-12 col-md-6">
+        <label asp-for="SalesRecord.Amount" class="form-label"></label>
+        <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input asp-for="SalesRecord.Amount" type="number" step="0.01" min="0.01" class="form-control" placeholder="0,00" />
+        </div>
+        <span asp-validation-for="SalesRecord.Amount"></span>
+    </div>
+    <div class="col-12">
+        <label asp-for="SalesRecord.Status" class="form-label"></label>
+        <select asp-for="SalesRecord.Status" class="form-select">
+            @foreach (var s in Enum.GetValues<SaleStatus>())
+            {
+                <option value="@s" selected="@(Model.SalesRecord.Status == s)">@s.DisplayName()</option>
+            }
+        </select>
+        <span asp-validation-for="SalesRecord.Status"></span>
+    </div>
+</div>

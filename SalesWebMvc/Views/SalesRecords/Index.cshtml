@@ -1,0 +1,179 @@
+@model SalesRecordListViewModel
+@using Microsoft.AspNetCore.Http.Extensions
+@{
+    ViewData["Title"] = "Registro de Vendas";
+    var f = Model.Filter;
+
+    // Query string atual sem página/ordenação — base para links de ordenação e exportação
+    QueryBuilder BaseQuery(params string[] skip)
+    {
+        var q = new QueryBuilder();
+        foreach (var (key, values) in Context.Request.Query)
+        {
+            if (skip.Contains(key, StringComparer.OrdinalIgnoreCase)) continue;
+            foreach (var v in values) if (!string.IsNullOrEmpty(v)) q.Add(key, v);
+        }
+        return q;
+    }
+
+    string SortUrl(string asc, string desc)
+    {
+        var q = BaseQuery("page", "sort");
+        q.Add("sort", f.Sort == desc ? asc : desc);
+        return Context.Request.Path + q.ToQueryString();
+    }
+
+    string SortIcon(string asc, string desc) =>
+        f.Sort == asc ? "bi-sort-up" : f.Sort == desc ? "bi-sort-down" : "bi-arrow-down-up opacity-50";
+
+    string SortCss(string asc, string desc) => f.Sort == asc || f.Sort == desc ? "sorted" : "";
+
+    var exportUrl = Url.Action("Export") + BaseQuery("page", "pageSize").ToQueryString();
+    var hasFilters = f.MinDate.HasValue || f.MaxDate.HasValue || f.DepartmentId.HasValue || f.Status.HasValue || !string.IsNullOrWhiteSpace(f.Search);
+}
+
+<div class="page-header">
+    <div>
+        <nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Dashboard</a></li><li class="breadcrumb-item active">Vendas</li></ol></nav>
+        <h1 class="page-title">Registro de Vendas</h1>
+        <p class="page-subtitle">Busque, filtre e exporte as vendas registradas.</p>
+    </div>
+    <div class="page-actions no-print">
+        <div class="dropdown">
+            <button class="btn btn-ghost dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-download me-1"></i> Exportar
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="@exportUrl"><i class="bi bi-filetype-csv me-2"></i>Excel / CSV (resultado completo)</a></li>
+                <li><button class="dropdown-item" type="button" onclick="window.print()"><i class="bi bi-filetype-pdf me-2"></i>PDF (imprimir página)</button></li>
+            </ul>
+        </div>
+        <a asp-action="Create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Nova venda</a>
+    </div>
+</div>
+
+<!-- ============ Filtros ============ -->
+<section class="card-app mb-3 no-print">
+    <form method="get" asp-action="Index" class="card-app-body filter-bar">
+        <div>
+            <label class="form-label" for="search">Vendedor</label>
+            <input class="form-control" id="search" name="search" value="@f.Search" placeholder="Nome do vendedor" />
+        </div>
+        <div>
+            <label class="form-label" for="minDate">De</label>
+            <input class="form-control" type="date" id="minDate" name="minDate" value="@f.MinDate?.ToString("yyyy-MM-dd")" />
+        </div>
+        <div>
+            <label class="form-label" for="maxDate">Até</label>
+            <input class="form-control" type="date" id="maxDate" name="maxDate" value="@f.MaxDate?.ToString("yyyy-MM-dd")" />
+        </div>
+        <div>
+            <label class="form-label" for="departmentId">Departamento</label>
+            <select class="form-select" id="departmentId" name="departmentId" data-autosubmit>
+                <option value="">Todos</option>
+                @foreach (var d in Model.Departments)
+                {
+                    <option value="@d.Id" selected="@(f.DepartmentId == d.Id)">@d.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="form-label" for="status">Status</label>
+            <select class="form-select" id="status" name="status" data-autosubmit>
+                <option value="">Todos</option>
+                @foreach (var s in Enum.GetValues<SaleStatus>())
+                {
+                    <option value="@s" selected="@(f.Status == s)">@s.DisplayName()</option>
+                }
+            </select>
+        </div>
+        <input type="hidden" name="sort" value="@f.Sort" />
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-funnel me-1"></i> Filtrar</button>
+            @if (hasFilters)
+            {
+                <a asp-action="Index" class="btn btn-ghost" title="Limpar filtros" aria-label="Limpar filtros"><i class="bi bi-x-lg"></i></a>
+            }
+        </div>
+    </form>
+</section>
+
+<!-- ============ Resultado ============ -->
+<section class="card-app">
+    <div class="card-app-header">
+        <div class="summary-strip">
+            <span><i class="bi bi-receipt me-1"></i> <strong>@Format.Number(Model.Records.TotalCount)</strong> vendas encontradas</span>
+            <span><i class="bi bi-check-circle me-1 text-success"></i> Faturado: <strong>@Format.Money(Model.FilteredBilledTotal)</strong></span>
+            <span><i class="bi bi-hourglass-split me-1 text-warning"></i> Pendente: <strong>@Format.Money(Model.FilteredPendingTotal)</strong></span>
+        </div>
+        <form method="get" asp-action="Index" class="d-flex align-items-center gap-2 no-print">
+            @foreach (var (key, values) in Context.Request.Query.Where(q => !q.Key.Equals("pageSize", StringComparison.OrdinalIgnoreCase) && !q.Key.Equals("page", StringComparison.OrdinalIgnoreCase)))
+            {
+                <input type="hidden" name="@key" value="@values" />
+            }
+            <label for="pageSize" class="small text-secondary text-nowrap">Por página</label>
+            <select id="pageSize" name="pageSize" class="form-select form-select-sm" style="width:5.5rem" data-autosubmit>
+                @foreach (var size in new[] { 10, 25, 50, 100 })
+                {
+                    <option value="@size" selected="@(Model.Records.PageSize == size)">@size</option>
+                }
+            </select>
+        </form>
+    </div>
+
+    @if (Model.Records.TotalCount == 0)
+    {
+        <div class="empty-state">
+            <i class="bi bi-search"></i>
+            Nenhuma venda encontrada@(hasFilters ? " com os filtros aplicados" : "").
+            @if (hasFilters) { <div class="mt-2"><a asp-action="Index">Limpar filtros</a></div> }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-app table-hover table-stack">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th><a class="th-sort @SortCss("date", "date_desc")" href="@SortUrl("date", "date_desc")">Data <i class="bi @SortIcon("date", "date_desc")"></i></a></th>
+                        <th><a class="th-sort @SortCss("seller", "seller")" href="@SortUrl("seller", "seller")">Vendedor <i class="bi @SortIcon("seller", "seller")"></i></a></th>
+                        <th>Departamento</th>
+                        <th class="text-end"><a class="th-sort @SortCss("amount", "amount_desc")" href="@SortUrl("amount", "amount_desc")">Valor <i class="bi @SortIcon("amount", "amount_desc")"></i></a></th>
+                        <th>Status</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Records.Items)
+                    {
+                        <tr>
+                            <td data-label="#" class="text-secondary">@item.Id</td>
+                            <td data-label="Data">@Format.Date(item.Date)</td>
+                            <td data-label="Vendedor">
+                                <div class="cell-person">
+                                    <span class="avatar avatar-sm">@Format.Initials(item.Seller?.Name ?? "?")</span>
+                                    <span class="name">@item.Seller?.Name</span>
+                                </div>
+                            </td>
+                            <td data-label="Departamento"><span class="dept-chip">@item.Seller?.Department?.Name</span></td>
+                            <td data-label="Valor" class="text-end amount">@Format.Money(item.Amount)</td>
+                            <td data-label="Status"><status-badge status="@item.Status" /></td>
+                            <td>
+                                <div class="row-actions">
+                                    <a asp-action="Details" asp-route-id="@item.Id" class="btn-icon" title="Detalhes" aria-label="Detalhes da venda #@item.Id"><i class="bi bi-eye"></i></a>
+                                    <a asp-action="Edit" asp-route-id="@item.Id" class="btn-icon" title="Editar" aria-label="Editar venda #@item.Id"><i class="bi bi-pencil"></i></a>
+                                    <button type="button" class="btn-icon danger" title="Excluir" aria-label="Excluir venda #@item.Id"
+                                            data-delete-url="@Url.Action("Delete", new { id = item.Id })" data-delete-name="a venda #@item.Id (@Format.Money(item.Amount))">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <partial name="_Pagination" model="Model.Records" />
+    }
+</section>

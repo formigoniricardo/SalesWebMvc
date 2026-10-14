@@ -1,42 +1,207 @@
-﻿@model IEnumerable<SalesWebMvc.Models.Department>
-
+@model DashboardViewModel
 @{
-    ViewData["Title"] = "Departments";
+    ViewData["Title"] = "Dashboard";
+
+    // Paleta categórica validada (contraste e daltonismo) contra a superfície escura dos cards
+    string[] palette = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+    var deptTotal = Model.RevenueByDepartment.Sum(d => d.Amount);
+
+    var chartData = new
+    {
+        monthly = new
+        {
+            labels = Model.MonthlyRevenue.Select(m => m.Label),
+            values = Model.MonthlyRevenue.Select(m => m.Billed)
+        },
+        departments = new
+        {
+            labels = Model.RevenueByDepartment.Select(d => d.Department),
+            values = Model.RevenueByDepartment.Select(d => d.Amount),
+            colors = Model.RevenueByDepartment.Select((_, i) => palette[i % palette.Length])
+        }
+    };
 }
 
-<h2>Departments</h2>
+@functions {
+    // Badge de variação: ícone + texto, nunca só a cor
+    Microsoft.AspNetCore.Html.IHtmlContent Delta(decimal? change)
+    {
+        if (change is null)
+            return new Microsoft.AspNetCore.Html.HtmlString("<span class=\"delta delta-flat\">—</span>");
 
-<p>
-    <a asp-action="Create">Create New</a>
-</p>
-<table class="table">
-    <thead>
-        <tr>
-            <th>
-                @Html.DisplayNameFor(model => model.Id)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Name)
-            </th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var item in Model)
-        {
-            <tr>
-                <td>
-                    @Html.DisplayFor(modelItem => item.Id)
-                </td>
-                <td>
-                    @Html.DisplayFor(modelItem => item.Name)
-                </td>
-                <td>
-                    @Html.ActionLink("Edit", "Edit", new { /* id=item.PrimaryKey */ }) |
-                    @Html.ActionLink("Details", "Details", new { /* id=item.PrimaryKey */ }) |
-                    @Html.ActionLink("Delete", "Delete", new { /* id=item.PrimaryKey */ })
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+        var css = change > 0 ? "delta-up" : change < 0 ? "delta-down" : "delta-flat";
+        var icon = change > 0 ? "bi-arrow-up-right" : change < 0 ? "bi-arrow-down-right" : "bi-dash";
+        var text = (change > 0 ? "+" : "") + Format.Percent(change.Value);
+        return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"delta {css}\"><i class=\"bi {icon}\"></i>{text}</span>");
+    }
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Visão geral de vendas e faturamento em @Model.Year.</p>
+    </div>
+    <div class="page-actions">
+        <a asp-controller="SalesRecords" asp-action="Index" class="btn btn-ghost"><i class="bi bi-search me-1"></i> Buscar vendas</a>
+        <a asp-controller="SalesRecords" asp-action="Create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Nova venda</a>
+    </div>
+</div>
+
+<!-- ============ KPIs ============ -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-app kpi tone-green">
+            <div class="kpi-top">
+                <span class="kpi-label">Faturamento total</span>
+                <span class="kpi-icon"><i class="bi bi-currency-dollar"></i></span>
+            </div>
+            <div class="kpi-value">@Format.Money(Model.TotalRevenue)</div>
+            <div class="kpi-foot">@Delta(Model.RevenueChange) <span>vs. mesmo período do mês anterior</span></div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-app kpi tone-blue">
+            <div class="kpi-top">
+                <span class="kpi-label">Vendas registradas</span>
+                <span class="kpi-icon"><i class="bi bi-receipt"></i></span>
+            </div>
+            <div class="kpi-value">@Format.Number(Model.SalesCount)</div>
+            <div class="kpi-foot">@Delta(Model.SalesCountChange) <span>exceto canceladas</span></div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-app kpi tone-violet">
+            <div class="kpi-top">
+                <span class="kpi-label">Vendedores ativos</span>
+                <span class="kpi-icon"><i class="bi bi-people"></i></span>
+            </div>
+            <div class="kpi-value">@Model.ActiveSellers <small class="fs-6 text-secondary fw-normal">/ @Model.TotalSellers</small></div>
+            <div class="kpi-foot"><span>com ao menos uma venda no ano</span></div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-app kpi tone-amber">
+            <div class="kpi-top">
+                <span class="kpi-label">Média por venda</span>
+                <span class="kpi-icon"><i class="bi bi-graph-up"></i></span>
+            </div>
+            <div class="kpi-value">@Format.Money(Model.AverageTicket)</div>
+            <div class="kpi-foot">@Delta(Model.AverageTicketChange) <span>ticket médio faturado</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Gráficos ============ -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+        <section class="card-app h-100">
+            <div class="card-app-header">
+                <div>
+                    <h2 class="card-app-title">Faturamento mensal</h2>
+                    <p class="card-app-subtitle">Vendas faturadas por mês em @Model.Year</p>
+                </div>
+            </div>
+            <div class="card-app-body">
+                <div class="chart-box">
+                    <canvas id="monthlyChart" role="img" aria-label="Gráfico de faturamento mensal de @Model.Year"></canvas>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="col-12 col-xl-4">
+        <section class="card-app h-100">
+            <div class="card-app-header">
+                <div>
+                    <h2 class="card-app-title">Vendas por departamento</h2>
+                    <p class="card-app-subtitle">Participação no faturamento de @Model.Year</p>
+                </div>
+            </div>
+            <div class="card-app-body">
+                @if (Model.RevenueByDepartment.Count == 0)
+                {
+                    <div class="empty-state"><i class="bi bi-pie-chart"></i>Nenhuma venda faturada neste ano.</div>
+                }
+                else
+                {
+                    <div class="chart-box-sm">
+                        <canvas id="departmentChart" role="img" aria-label="Gráfico de distribuição de vendas por departamento"></canvas>
+                    </div>
+                    <ul class="chart-legend">
+                        @for (var i = 0; i < Model.RevenueByDepartment.Count; i++)
+                        {
+                            var d = Model.RevenueByDepartment[i];
+                            <li>
+                                <span class="swatch" style="background:@palette[i % palette.Length]"></span>
+                                <span class="legend-name">@d.Department</span>
+                                <span class="legend-value">@Format.Money(d.Amount)</span>
+                                <span class="legend-pct">@Format.Percent(deptTotal == 0 ? 0 : d.Amount / deptTotal * 100)</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- ============ Atividades recentes ============ -->
+<section class="card-app">
+    <div class="card-app-header">
+        <div>
+            <h2 class="card-app-title">Últimas vendas registradas</h2>
+            <p class="card-app-subtitle">As 8 movimentações mais recentes</p>
+        </div>
+        <a asp-controller="SalesRecords" asp-action="Index" class="btn btn-sm btn-ghost">Ver todas <i class="bi bi-arrow-right ms-1"></i></a>
+    </div>
+    @if (Model.RecentSales.Count == 0)
+    {
+        <div class="empty-state"><i class="bi bi-inbox"></i>Nenhuma venda registrada ainda.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-app table-hover table-stack">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Vendedor</th>
+                        <th>Departamento</th>
+                        <th class="text-end">Valor</th>
+                        <th>Status</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sale in Model.RecentSales)
+                    {
+                        <tr>
+                            <td data-label="Data">@Format.Date(sale.Date)</td>
+                            <td data-label="Vendedor">
+                                <div class="cell-person">
+                                    <span class="avatar avatar-sm">@Format.Initials(sale.Seller?.Name ?? "?")</span>
+                                    <span class="name">@sale.Seller?.Name</span>
+                                </div>
+                            </td>
+                            <td data-label="Departamento"><span class="dept-chip">@sale.Seller?.Department?.Name</span></td>
+                            <td data-label="Valor" class="text-end amount">@Format.Money(sale.Amount)</td>
+                            <td data-label="Status"><status-badge status="@sale.Status" /></td>
+                            <td>
+                                <div class="row-actions">
+                                    <a asp-controller="SalesRecords" asp-action="Details" asp-route-id="@sale.Id" class="btn-icon" title="Detalhes" aria-label="Detalhes da venda #@sale.Id"><i class="bi bi-eye"></i></a>
+                                    <a asp-controller="SalesRecords" asp-action="Edit" asp-route-id="@sale.Id" class="btn-icon" title="Editar" aria-label="Editar venda #@sale.Id"><i class="bi bi-pencil"></i></a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<script id="dashboard-data" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(chartData))</script>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+}
